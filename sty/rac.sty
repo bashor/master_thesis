@@ -12,6 +12,7 @@
 \def\kw@APPENDIX{Приложение}
 \def\kw@CHAPTER{}
 \def\kw@CONCLUSION{Заключение}
+\def\kw@REFERAT{Реферат}
 
 \parindent=15mm
 %\listparindent=0mm
@@ -102,6 +103,11 @@
  \newpage
  \addcontentsline{toc}{chapter}{\st@CONTENTSPRECHAPTER\kw@CONCLUSION}
  \makeheading{\kw@CONCLUSION}
+}
+
+\def\startreferatpage{%
+ \newpage
+ \makeheading{\kw@REFERAT}
 }
 
 \def\startabstractpage#1#2#3{%
