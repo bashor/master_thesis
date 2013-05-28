@@ -1,4 +1,4 @@
-all: diploma
+all: diploma_quiet
 
 help:
 	@echo "Use:"
@@ -9,6 +9,12 @@ help:
 build: diploma
 
 diploma:
+	pdflatex main.tex
+	bibtex main.aux
+	pdflatex main.tex
+	pdflatex main.tex
+
+diploma_quiet:
 	pdflatex main.tex > /dev/null
 	bibtex main.aux > /dev/null
 	pdflatex main.tex > /dev/null
