@@ -1,0 +1,6 @@
+#								Havlak  (ms)
+"	 Kotlin2JS (без изм.)"		103371	0	0
+"	 Inline акc. и пакеты"		69744	0	0
+"	  Kotlin.$new -> new"		11989	0	0
+" оптмизация hashObject"		7406	0	0
+"	  PrimitiveHashMap"			5615	0	0
