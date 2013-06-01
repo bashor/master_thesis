@@ -1,0 +1,10 @@
+#								Havlak  (ms)
+"				    Dart"		654		0		0
+"			     Dart2JS"		1685	0		0
+"		  JavaScript (v8)"		1030	0		0
+"		    Kotlin2JS (v8)"		0		103371	0
+"	   Kotlin2JS OPT (v8)"		0		0		1641
+"	    Dart2JS(mozjs17)" 		20637	0	 	0
+"	JavaScript (mozjs17)"		1007	0		0
+"	 Kotlin2JS (mozjs17)"		0		52893	0
+"Kotlin2JS OPT (mozjs17)"		0		0		5615
