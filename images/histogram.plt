@@ -21,7 +21,8 @@ set xtics rotate by 90 scale 0 offset 0, -9
 unset ytics
 unset key
 set y2tics 0, stepDel, maxDel rotate by 90 offset 0, -1.5
-set y2label sprintf('Время работы (%s)', s) offset -2.5
+set y2label sprintf('%s', s) offset -2.5
+set format y2 "%10.0f"
 
 set yrange [0:xMax]
 set xrange [-0.5:(histCount + 0.7)]

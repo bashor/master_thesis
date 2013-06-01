@@ -1,0 +1,555 @@
+\chapter{Анализ результатов тестирования и оптимизация генерируемого кода}
+
+\section{Методика тестирования}
+
+Запуск тестов производилось на компьютере со следующими характеристиками:
+\begin{itemize}
+\item Процессор: Intel(R) Core(TM)2 CPU 6400 с частотой 2.13 GHz.
+\item Размер оперативной памяти: 4 гб.
+\item Операционная система: Ubuntu 12.10 64-bit.
+\end{itemize}
+
+Для запуска JavaScript кода, в том числе сгенерированного компиляторами Kotlin и Dart2js, использовались виртуальные машины V8 и SpiderMonkey 17 (mozjs17). При запуске тестов с использованием SpiderMonkey использовался следующий набор ключей: <<\path$--methodjit$ \path$--typeinfer$>>. Первый параметр включает JIT компиляции методов с помощью JaegerMonkey, второй -- включает сбор информации о типах переменных и дальнейшее использования этой информации для оптимизаций.
+Для запуска тестов на языке Dart использовалась виртуальная машина DartVM. Виртуальная машина языка Dart и компилятор Dart2js были взяты из Dart SDK версии 0.4.2.8.
+
+Каждое измерение состоит из двух основных этапов, каждый длительностью в 2 секунды. В качестве результата берутся только результаты второго запуска, а первый запуск нужен для того что бы дождаться пока виртуальная машина перейдет в стабильное состояние. Так же, на этом этапе осуществляется так называемый <<прогрев>> виртуальной машины. Для <<прогрева>> виртуальной машины на нем запускается код теста. Данная процедура, позволяет виртуальной машине собрать необходимую информацию о коде, чтобы провести оптимизации и выполнять тест максимально быстро на втором этапе.
+В время основного запуска измеряется количество успешных итераций запущенных в течении двух секунд и то сколько реально времени на это было потрачено. 
+В конце каждой итерации выполняется проверка результатов и в случае если они не соответствуют эталонному значению тестирование экстренно завершается. Результатом работы теста является среднее время выполнения одной итерации.
+
+\section{Richards}
+
+Результаты, полученные на начальном этапе, когда еще не были сделаны никакие оптимизации, на тест Richards представленны на рисунке \ref{richards_0}.
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=0.8\textwidth]{images/richards_0.png}
+\caption{Результаты теста Richards без оптимизаций}
+\label{richards_0}
+\end{figure}
+
+Из данной диаграммы видно, что при запуске на виртуальной машине V8 тест, скомпилированный с помощью компилятора Kotlin, уступает тесту, скомпилированному с помощью Dart2js, примерно в 4 раза, а тесту написанном на JavaScripte -- более чем в 5 раз. При запуске на mozjs17 эта разница, при сравнении с тестом написанном JavaScript увеличивается до примерно 15 раз и в случае с Dart2js уменьшается до 2 раза. Безусловным лидером данного и всех остальных тестов является код написанный на Dart и запущенный в DartVM.
+
+Если открыть код, получившейся в результате компиляции с помощью компилятора Kotlin, не трудно заметить, что все обращения даже внутри пакета осуществляются по полному имени (см. листинг \ref{example_with_package}). Такого рода обращений в получившемся коде очень много и в случае большой вложенности пакетов это может отрицательно сказаться на результаты. 
+
+\begin{code}
+\begin{JavaScript}[caption=Пример код с обращением по полному имени внутри того же пакета, label=example_with_package]
+...
+_ = {
+org: Kotlin.definePackage({
+  jetbrains: Kotlin.definePackage({
+    kotlin: Kotlin.definePackage({
+      benchmarks: Kotlin.definePackage({
+        Richards_from_darts: Kotlin.definePackage({
+          js: Kotlin.definePackage({
+            //...
+            addIdleTask: function (id, priority, queue, count) {
+            this.addRunningTask(id, priority, queue, new _.org.jetbrains.kotlin.benchmarks.Richards.js.IdleTask(this, 1, count));
+            }
+            //...
+\end{JavaScript}
+\end{code}
+
+Эксперименты подтвердили, что для виртуальной машины V8 это действительно так -- этот же тест, но с меньшей вложенностью пакетов выполняется примерно на 30\% быстрее. А для виртуальной машины mozjs17 такое изменение никакого влияния на производительность не оказало(см. рисунок \ref{richards_i}).
+
+\begin{figure}[ht!]
+\centering
+	\begin{subfigure}[b]{0.7\textwidth}
+	\centering
+	\includegraphics[width=\textwidth]{images/richards_i_v8.png}
+	\caption{Результаты измерений на V8}
+    \end{subfigure}
+
+  	\begin{subfigure}[b]{0.7\textwidth}
+	\centering
+	\includegraphics[width=\textwidth]{images/richards_i_mozjs17.png}
+	\caption{Результаты измерений на mozjs17}
+    \end{subfigure}
+\\*``+'' означает что изменения накладываются на предыдущее
+\caption{Оптимизация кода сгенерированного на тесте Richards}
+\label{richards_i}
+\end{figure}
+
+% К сожалению, из-за структурных сложностей реализовать качественную оптимизацию для этого случая не удалось.
+
+Далее, можно заметить что все обращения к полям классов реализованы через функции обычно называемые <<аксессорами>>. Это объясняется тем, что в языке Kotlin у объектов нет полей, есть только свойства. По-умолчанию свойства имеют простую реализацию <<аксессоров>>, но пользователь может написать свою функцию <<аксессор>>. Для единообразия кода и для <<бинайрной>>\footnote{Под <<бинарной>> совместимостью понимается возможность изменять кода без необходимости перекомпилировать зависящие от него части}
+совместимости компилятор все <<аксессоры>> транслирует в функции, а их доступ к ним -- в вызов соответствующих функций. Пример такого кода на языке Kotlin приведен в листинге \ref{accessor_example_kt}, результат компиляции данного кода приведен в листинге \ref{accessor_example_js}
+
+\begin{code}
+\begin{Kotlin}[caption=Пример использования <<аксессоров>> в языке Kotlin, label=accessor_example_kt]
+class User(val name: String, var password: String) {
+  var status: String = "status"
+    get() {
+      //do something
+      return $status
+    }
+    set(newVal) {
+      //do something
+      $status = newVal
+    }
+}
+\end{Kotlin}
+\end{code}
+
+Конечно же, современные виртуальные машины умеют подобного рода код встраивать в место вызова. Эксперименты подтвердили что многие <<аксессоры>> действительно встраиваются, но не все, например это может случиться если виртуальная машина посчитает, что данная функция не достаточно часто вызывается чтобы его встраивать или если  метод вызывается из многих мест компилятор может решить что встраивать в места всех вызовов слишком дорого. 
+Полное встраивание <<акссесоров>> не осуществил и статический компилятор Closure-compiler. На рисунке \ref{richards_i} можно видеть как Closure-compiler повлиял на результат.
+Далее был проведен эксперимент с полным встраиванием кода, что дало существенный выигрыш. Таким образом, при помощи несложных модификаций удалось получить почти четырехкратное ускорение. 
+
+\begin{code}
+\begin{JavaScript}[caption=Результат компиляции примера использования <<аксессоров>> в языке Kotlin (листинг \ref{accessor_example_kt}), label=accessor_example_js]
+(function () {
+  'use strict';
+  var _ = {
+    User: Kotlin.createClass({
+      initialize: function (name, password) {
+        this.$name = name;
+        this.$password = password;
+        this.$status = 'status';
+      },
+      get_name: function () {
+        return this.$name;
+      },
+      get_password: function () {
+        return this.$password;
+      },
+      set_password: function (tmp$0) {
+        this.$password = tmp$0;
+      },
+      get_status: function () {
+        return this.$status;
+      },
+      set_status: function (newVal) {
+        this.$status = newVal;
+      }
+    })
+  };
+  Kotlin.defineModule('JS_TESTS', _);
+}());
+\end{JavaScript}
+\end{code}
+
+Таким образом, было решено реализовать данную оптимизацию, но наряду с увеличением производительности хотелось сохранить имеющиеся плюсы имеющейся версии, а именно <<бинарную>> совместимость и читабельность кода. Было проведено исследование возможности использования в данной оптимизации свойства из стандарта ECMAScript версии 5\cite{ES5}. Был написан небольшой тест для проверки следующих случаев (см. листинг \ref{prop_test}):
+\begin{itemize}
+	\item создания объектов с полем с помощью object литерала
+	\item создания объектов с последующим добавлением поля
+	\item создания объектов с последующим добавлением свойства
+\end{itemize}
+
+\begin{code}
+\begin{JavaScript}[caption=Тест производительности для сравнения скорости создания объектов с полем и свойством, label=prop_test]
+function object_literal() {
+	var obj1 = { id: 1 };
+}
+
+function add_at_runtime() {
+    var obj3 = {};
+    obj3.id = 1;
+}
+
+function add_property() {
+    var obj2 = {};
+    Object.defineProperty(obj2, 'id', {value:1});
+}   
+\end{JavaScript}
+\end{code}
+
+Первый тест, результаты которого приведены на рисунке \ref{prop_constructing_test}, показал, что современные виртуальные машины хуже оптимизируют создание объектов с добавлением в них свойств по сравнение с созданием объектов с полями. Следующий тест, проверяющий скорость доступа к полям и свойствам (см. рисунок \ref{prop_access_test}), так же оказался не в пользу свойств -- современные виртуальные машины хуже оптимизируют доступ к свойствам.
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=0.75\textwidth]{images/prop_constructing_test.png}
+\caption{Результаты тестирования скорости создания объектов с полями и свойствами}
+\label{prop_constructing_test}
+\end{figure}
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=0.75\textwidth]{images/prop_access_test.png}
+\caption{Результаты тестирования скорости доступа к полям и свойствам}
+\label{prop_access_test}
+\end{figure}
+
+Компромиссом в данной ситуации стало решение использовать свойства ES5 только в случаях когда пользователь задает свои <<аксессоры>>. В остальных случаях было решено использовать обычные поля объектов. Такое решение позволяет сочетать максимальную скорость и <<бинарную>> совместимость. Кроме того, данная оптимизация улучшило читаемость и уменьшило объем кода получаемого после компиляции. В листинге \ref{accessor_example_opt_js} приведен результат компиляции после оптимизации.
+
+\begin{code}
+\begin{JavaScript}[caption=Результат компиляции примера использования <<аксессоров>> в языке Kotlin (листинг \ref{accessor_example_kt}) после оптимизации, label=accessor_example_opt_js]
+(function () {
+  'use strict';
+  var _ = {
+    User: Kotlin.createClass({
+      initialize: function (name, password) {
+        this.name = name;
+        this.password = password;
+        this.$status = 'status';
+      },
+      status: {
+      	get: function () {
+        	return this.$status;
+      	},
+      	set: function (newVal) {
+        	this.$status = newVal;
+      	}
+      }
+    })
+  };
+  Kotlin.defineModule('JS_TESTS', _);
+}());
+\end{JavaScript}
+\end{code}
+
+В результате исследования кода, полученного после компиляции теста Richards, были сделаны следующие выводы:
+\begin{itemize}
+\item Необходимо упростить обращения внутри пакета.
+\item Необходимо сделать аналог импортов, предоставив тем самым возможность кратко обращаться к объектам и их полям из других пакетов.
+\item Поля и свойства классов и объектов нужно инициализировать в конструкторе и одном порядке.
+\item Необходимо упростить структуру генерируемого кода.
+\end{itemize}
+
+Реализованная оптимизация доступа к свойствам позволила значительно улучшить результаты кода скомпилированного с помощью компилятора Kotlin. Итоговый результат приведен на рисунке \ref{richards_f}
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=0.8\textwidth]{images/richards_f.png}
+\caption{Итоговый результат на тесте Richards}
+\label{richards_f}
+\end{figure}
+
+\section{DeltaBlue}
+
+Результаты, полученные на начальном этапе, когда еще не были сделаны никакие оптимизации, на тест DeltaBlue представленны на рисунке \ref{deltablue_0}.
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=0.8\textwidth]{images/deltablue_0.png}
+\caption{Результаты теста DeltaBlue без оптимизаций}
+\label{deltablue_0}
+\end{figure}
+
+При запуске на виртуaльной машине V8 тест скомпилированный с помощью компилятора Kotlin уступает ближайшему сопернику -- тесту скомпилированному с помощью Dart2js на 2 порядка. При запуске на mozjs17 на порядок медленнее чем ближайший конкурент Dart2js.
+
+\begin{figure}[ht!]
+\centering
+	\begin{subfigure}[b]{0.63\textwidth}
+	\centering
+	\includegraphics[width=\textwidth]{images/deltablue_i_v8.png}
+	\caption{Результаты измерений на V8}
+    \end{subfigure}
+
+  	\begin{subfigure}[b]{0.63\textwidth}
+	\centering
+	\includegraphics[width=\textwidth]{images/deltablue_i_mozjs17.png}
+	\caption{Результаты измерений на mozjs17}
+    \end{subfigure}
+\\*``+'' означает что изменения накладываются на предыдущее
+\caption{Оптимизация кода сгенерированного на тесте DeltaBlue}
+\label{deltablue_i}
+\end{figure}
+
+На рисунке \ref{deltablue_i} можно видеть результат проведенных экспериментов. В первую очередь была применена оптимизация сделанная для теста Richards -- это дало ускорение в среднем на 30\%, но все равно разница с конкурентами все ещё достаточно большая, поэтому эксперименты были продолжены. Ощутимое ускорение удалось получить в следствии замены везде ArrayList на LinkedList.
+Как видно из диаграмм небольшой выигрыш так же можно получить заменив все контейнеры на массивы. 
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=0.7\textwidth]{img/deltablue_0_profile.png}
+\caption{Результаты сбора профилировочной информации на тесте DeltaBlue}
+\label{deltablue_0_prifile}
+\end{figure}
+
+На рисунке \ref{deltablue_0_prifile} приведены результаты профилирования теста DeltaBlue. Как видно, много времени тратится на конструирование объектов, причем существенную долю этого времени занимает работа инфраструктурного кода. Как можно видеть на рисунке \ref{deltablue_i}, экспериментально удалось подтвердить, что ускорить конструирование объектов в рамках существующей структуры возможно.
+
+\newpage
+Приведем простой пример демонстрирующий данную проблему (листинги \ref{constructor_problem_kt} и \ref{constructor_problem_js}):
+
+\begin{code}
+\begin{Kotlin}[caption=Пример с наследованием, label=constructor_problem_kt]
+open class A(val name: String)
+
+class B(name: String) : A(name)
+\end{Kotlin}
+\end{code}
+
+\begin{code}
+\begin{JavaScript}[caption=Результат компиляции пример с наследованием, label=constructor_problem_js]
+(function () {
+  'use strict';
+  var classes = function () {
+    var c0 = Kotlin.createClass({
+      initialize: function (name) {
+        this.name = name;
+      }
+    });
+    return {c0: c0};
+  }()
+  , _ = {
+    A: classes.c0,
+    B: Kotlin.createClass(classes.c0, {
+      initialize: function (name) {
+        this.super_init(name);
+      }
+    })
+  };
+  Kotlin.defineModule('JS_TESTS', _);
+}());
+\end{JavaScript}
+\end{code}
+
+\newpage
+Первая проблема заключается в том, что при создании <<класса>> вызов функции инициализатора \path{initialize} оборачивается в библиотечную функцию \path{klass} (см. листин \ref{klass_js}), вызов которого мы и наблюдаем в профилировщике. Что создает дополнительные расходы при создании объектов -- ввиде дополнительного вызова функции. Данную проблему можно решить избавившись от функции <<обертки>> и использованием созданием пустого инициализатора в случае отсутствия своего инициализатора у создаваемого класса.
+
+\begin{code}
+\begin{JavaScript}[caption=Функция klass из стандартной библиотеки, label=klass_js]
+function klass() {
+    this.initializing = klass;
+    if (this.initialize) {
+        this.initialize.apply(this, arguments);
+    }
+}
+\end{JavaScript}
+\end{code}
+
+Следующая проблема связана с вызовом конструктора наследуемого класса, который реализуется ввиде вызова функции \path{super_init}, код которого приведен в листинге \ref{super_init_js}. Что опять создает накладные расходы при создании экземпляров класса с предком отличным от \path{Any}.
+
+\begin{code}
+\begin{JavaScript}[caption=Функция super\_init из стандартной библиотеки, label=super_init_js]
+function super_init () {
+	this.initializing = this.initializing.superclass;
+	this.initializing.prototype.initialize.apply(this, arguments);
+}                
+\end{JavaScript}
+\end{code}
+
+Для решения данной проблемы было решено заменить генерацию, в теле инициализатора, вызова функции \path{super_init} на <<прямой>> вызов конструктора супер класса. Для приведенного ранее примера (листинг \ref{constructor_problem_kt}) такой код будет выглядеть следующим образом:
+
+\begin{code}
+\begin{JavaScript}[caption=\relax, label=constructor_problem_js]
+(function () {
+  'use strict';
+  var classes = function () {
+    var c0 = Kotlin.createClass({
+      initialize: function (name) {
+        this.name = name;
+      }
+    });
+    return {c0: c0};
+  }()
+  , _ = {
+    A: classes.c0,
+    B: Kotlin.createClass(classes.c0, {
+      initialize: function (name) {
+        A.call(this, name);
+      }
+    })
+  };
+  Kotlin.defineModule('JS_TESTS', _);
+}());
+\end{JavaScript}
+\end{code}
+
+Так же, была оптимизирована реализация функции \path{Kotlin.equals}, которая используется для сравнения объектов и судя по результату профилировки тоже вызывается достаточно часто. Так же было оптимизировано сравнение примитивных типов, которая так же осуществлялась через вызов функции \path{Kotlin.equals}, в то время как было бы достаточно и оптимальнее использовать оператор \path{===}.
+
+Реализованные оптимизации позволили значительно улучшить результаты кода скомпилированного с помощью компилятора Kotlin. На рисунке \ref{deltablue_f} можно видеть что  итоговые результаты очень близки к результатам компилятора Dart2js.
+
+
+Кроме того, в результате исследования кода, полученного после компиляции теста DeltaBlue, были сделаны следующие выводы:
+\begin{itemize}
+\item Необходимо пересмотреть реализации контейнеров в стандартной библиотеке.
+\item Необходимо, когда это возможно, на этапе компиляции заменять используемые контейнеры на родные для JavaScript аналоги.
+\item Не использовать \path{Kotlin..equals} для проверки ссылочной эквивалентности объектов.
+\end{itemize}
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=0.8\textwidth]{images/deltablue_f.png}
+\caption{Итоговый результат на тесте DeltaBlue}
+\label{deltablue_f}
+\end{figure}
+
+\newpage
+\section{Havlak}
+
+Результаты, полученные на начальном этапе, когда еще не были сделаны никакие оптимизации, на тест Havlak представленны на рисунке \ref{havlak_0}.
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=0.8\textwidth]{images/havlak_0.png}
+\caption{Результаты теста Havlak без оптимизаций}
+\label{havlak_0}
+\end{figure}
+
+На диаграмме видно, что снова быстрее всех код написанный на Dart и выполняющийся в DartVM. Следом идет, как ни странно, результат скомпилированный с помощью Dart2js. Это объясняется тем что в реализации на JavaScript очень часто используемый кусок был сделан не очень оптимально, а именно то, что в качестве ключа ассоциативного массива используется объект(см. листинг \ref{example_BaseBlock}).
+
+\begin{code}
+\begin{JavaScript}[caption=Пример неоптимального использования ассоциативного массива на JavaScript, label=example_BaseBlock]
+...
+function BasicBlock(name)
+{
+  this.name = name;
+  ...
+}
+
+BasicBlock.prototype.toString = function() {
+  return "BB" + this.name;
+}
+...
+function DFS(currentNode, nodes, number, last, current) {
+...
+  number[currentNode] = current;
+...
+}
+\end{JavaScript}
+\end{code}
+
+Данное решение не оптимально потому, что при каждом доступ к такому массиву виртуальная машина вызывает у объекта метод toString, а в этом методе каждый раз осуществляется конкатенация двух строк, одна из которых получается преобразованием числа из поля \path{name} в строку. Эксперименты показали, что если для доступа к объектам ассоциативного массива использовать не объект а например поле \path{name}, как в листинге \ref{example_BaseBlock_fixed}, то тест будет выполнятся в два раза быстрее.
+
+\begin{code}
+\begin{JavaScript}[caption=Пример улучшения использования ассоциативного массива в тесте на JavaScript, label=example_BaseBlock_fixed]
+...
+function DFS(currentNode, nodes, number, last, current) {
+...
+  number[currentNode.name] = current;
+...
+}
+\end{JavaScript}
+\end{code}
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=0.8\textwidth]{img/havlak_0_profile.png}
+\caption{Результаты профилирования на тесте Havlak}
+\label{havlak_0_profile}
+\end{figure}
+
+
+На рисунке \ref{havlak_0_profile} представлены результаты профилирования кода полученного компилятором Kotlin. Наибольший интерес для нас представляют функции из стандартной библиотеке, это связанно с тем, что нашей главной целью является увеличить общую производительность, а не просто увеличить скорость выполнения конкретно взятого кода или теста. В результате изучения кода были отобраны функции которые нуждаются в оптимизации. На рисунке такие функции помечены точкой в начале строки. В отношении остальных функций было решено что они достаточно оптимальны.
+
+Как видно, больше всего времени программа проводит в коде конструктора -- функция \path{klass}, что еще раз свидетельствует о необходимости оптимизировать процесс конструирования объектов. Результаты применения этой оптимизации можно видеть на рисунке \ref{havlak_i}.
+
+\begin{figure}[ht!]
+\centering
+  \begin{subfigure}[b]{0.7\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{images/havlak_i_v8.png}
+  \caption{Результаты измерений на V8}
+    \end{subfigure}
+
+    \begin{subfigure}[b]{0.7\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{images/havlak_i_mozjs17.png}
+  \caption{Результаты измерений на mozjs17}
+    \end{subfigure}
+\\*``+'' означает что изменения накладываются на предыдущее
+\caption{Оптимизация кода сгенерированного на тесте Havlak}
+\label{havlak_i}
+\end{figure}
+
+Следующая интересная для нас функция это \path{Kotlin.\$new}. Данная функция использовалась для старой реализации наследования, но в текущей реализации она уже не нужна. Поэтому данная функция была удалена, в результат чего был получен большой прирост скорости, который можно наблюдать на рисунке \ref{havlak_i}.
+
+В тесте Havlak очень активно используются ассоциативные массивы и от качества их реализации во многом зависит итоговый результат.
+На рисунке с результатом профилирования (\ref{havlak_0_profile}) это можно наблюдать ввиде вызовов функций \path{hashObject} и \path{getBucketForHash}.
+
+Функция \path{hashObject} используется в базовом классе для ассоциативных контейнеров \path{Hashtable} для получения хеша объекта. Оригинальная версия данной функции представлена в листинге \ref{hashObject_original}
+
+\begin{code}
+\begin{JavaScript}[caption=Оригинальная версия функции hashObject, label=hashObject_original]
+function hashObject(obj) {
+    var hashCode;
+    if (typeof obj == "string") {
+        return obj;
+    }
+    else if (typeof obj.hashCode == FUNCTION) {
+        // Check the hashCode method really has returned a string
+        hashCode = obj.hashCode();
+        return (typeof hashCode == "string") ? hashCode : hashObject(hashCode);
+    }
+    else if (typeof obj.toString == FUNCTION) {
+        return obj.toString();
+    }
+    else {
+        try {
+            return String(obj);
+        }
+        catch (ex) {
+            // For host objects (such as ActiveObjects in IE) that have no toString() method and throw an error when
+            // passed to String()
+            return Object.prototype.toString.call(obj);
+        }
+    }
+}
+\end{JavaScript}
+\end{code}
+
+В JavaScript при реализации ассоциативных массивов обычно пользуется тем что во время выполнения объектам языка (Object) можно добавлять и удалять свойства. Для работы с такими свойствами используется их строковое представление.\cite{EffJS} Зная это можно понять почему функция \path{hashObject} возвращает строку.
+
+Данная реализация имеет два основных недостатка:
+\begin{enumerate}
+\item данной реализации нет отдельной обработки чисел, в результате чего каждое обращение к число как объекту, во время наличия функций 	\path{hashObject} и \path{toString}, приводит к преобразованию его преобразованию в \path{Object}. Далее это чесло преобразуется в число не смотря на то что такое преобразование будет осуществлен при обращении к свойству.
+Кроме того такое преобразование чисел в строку может лишить виртуальную машину возможности оптимизировать обращения к индексированным свойствам объекта.
+
+\item Для объектов которые явно не реализуют функцию \path{toString}, в соответствии со стандартом \cite{ES5}, мы всегда будем получать один и тот же результат -- <<[object Object]>>. Что приведет к тому, что все такие объекты будут попадать в одну группу.
+\end{enumerate}
+
+Для исправления первого недостатка была добавлена соответствующая логика которая возвращает входного аргумент, без преобразований, если он имеет числовой тип (\path{number}).
+
+Для исправления второго недостатка была изменена логика работы функции в случае отсутствия у объекта реализации функции \path{hashCode}. В предлагаемой реализации выполняется в случае наличие специального поля \path{\$hashCode} возвращается значение данного поля. Иначе, с помощью функции \path{nextHashCode} получается новый хеш-код который сохраняется в специальное \path{\$hashCode}, для последующего использования, и возвращается как результат функции.
+Функция \path{nextHashCode} имеет простую реализацию и может быть легко изменен. Кончено же, в идеале, такая функция должна возвращать случайное значение, но эксперименты показали, что реализация такой функции, в плане производительности, обходится слишком дорого, даже при использовании стандартных функций \path{Number.random()} и \path{Date.now()}. Поэтому было решено оставить данную реализацию как самую быструю и простую.
+Получившиеся результат приведен в листинге \ref{hashObject_new}.
+
+\begin{code}
+\begin{JavaScript}[caption=Новая версия функции hashObject, label=hashObject_new]
+var HASH_CODE = 0;
+function nextHashCode() {
+    var hash = HASH_CODE;
+    HASH_CODE = (HASH_CODE + 1) | 0;
+    return hash;
+}
+
+function hashObject(obj) {
+    if (obj == null)
+        return obj;
+
+    var objType = typeof obj;
+    if (objType === "string" || objType === "number") {
+        return obj;
+    }
+    else if (typeof obj.hashCode == FUNCTION) {
+        // Check the hashCode method really has returned a string
+        var hashCode = obj.hashCode();
+        var hashCodeType = typeof hashCode;
+        return (hashCodeType === "string" || hashCodeType === "number") ? hashCode : hashObject(hashCode);
+    }
+    
+    if (obj.$hashCode === undefined) {
+        obj.$hashCode = nextHashCode();
+    }
+
+    return obj.$hashCode;
+}
+\end{JavaScript}
+\end{code}
+
+В случае если в качестве ключа используется примитивный тип или закрытый класс в котором не определена своя реализация функции \path{hashCode} можно использовать более простую и быструю реализацию ассоциативного контейнера -- \path{PrimitiveHashMap}.
+Для примитивных типов решение об использовании \path{PrimitiveHashMap} можно принимает на этапе компиляции. Для классов же такое решение не подходит, т.к. в определенных ситуациях это может нарушить <<бинарную>> совместимость. Поэтому было решено осуществлять выбор нужно контейнера во время выполнения. К сожалению, текущая структура классов, времени выполнения, не предоставляет информацию о закрытости типа из-за чего невозможно выполнить данную оптимизацию в полной мере.
+
+%Можно сделать SmartHashMap
+
+\null
+\begin{LARGE}
+\begin{center}
+\textbf{Результаты}
+\end{center}
+\end{LARGE}
+
+В результате проведенных оптимизаций удалось значительно улучшить результаты кода скомпилированного с помощью компилятора Kotlin. Итоговый результат приведен на рисунке \ref{havlak_f}
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=0.8\textwidth]{images/havlak_f.png}
+\caption{Итоговый результат на тесте Havlak}
+\label{havlak_f}
+\end{figure}
+
+% \begin{itemize}
+% \item Kotlin.\$new
+% \item hashCode
+% и контейнеры которые используют hashCode
+% \item Заменить все контейнеры на родные для JS аналоги
+% \end{itemize}

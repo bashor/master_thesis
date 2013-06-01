@@ -19,7 +19,7 @@
 
 % \usepackage{tikz}
 % \usepackage{graphics}
-% \usepackage{listings}
+% \usepackage{listings}0
 % \usepackage{ifthen}
 % \usepackage{algorithm}
 % \usepackage{booktabs}
@@ -32,17 +32,64 @@
 \usepackage{caption}
 \usepackage{subcaption}
 
-\lstset{
-captionpos=b,
-breaklines=true,
-% basicstyle=\ttfamily,
-keywordstyle=\bfseries,
-% keywordstyle=\color{javapurple}\bfseries,
-% basicstyle=\ttfamily\color{black},
-% keywordstyle=\bfseries\color{keyword},
-showstringspaces=false,
-morekeywords={fun, val, var, import, object, classpath, let, for, do, select, in, return, new, null, class, function}
+\lstdefinelanguage{JavaScript}{
+	keywords={typeof, new, true, false, catch, function, return, null, catch, switch, var, if, in, while, do, else, case, break},
+	% keywordstyle=\color{blue}\bfseries,
+	ndkeywords={class, export, boolean, throw, implements, import, this},
+	% ndkeywordstyle=\color{darkgray}\bfseries,
+	% identifierstyle=\color{black},
+	% sensitive=false,
+	comment=[l]{//},
+	morecomment=[s]{/*}{*/},
+	% commentstyle=\color{purple}\ttfamily,
+	% stringstyle=\color{red}\ttfamily,
+	morestring=[b]',
+	morestring=[b]",
+	% 
+	captionpos=b,
+	breaklines=true,
+	% basicstyle=\ttfamily,
+	keywordstyle=\bfseries,
+	% keywordstyle=\color{javapurple}\bfseries,
+	% basicstyle=\ttfamily\color{black},
+	% keywordstyle=\bfseries\color{keyword},
+	morekeywords={fun, val, var, import, object, classpath, let, for, do, select, in, return, new, null, class, function},
+	frame=tb
 }
+
+% \lstset{
+% 	captionpos=b,
+% 	breaklines=true,
+% 	language=JavaScript,
+% 	% basicstyle=\ttfamily,
+% 	keywordstyle=\bfseries,
+% 	% keywordstyle=\color{javapurple}\bfseries,
+% 	% basicstyle=\ttfamily\color{black},
+% 	% keywordstyle=\bfseries\color{keyword},
+% 	morekeywords={fun, val, var, import, object, classpath, let, for, do, select, in, return, new, null, class, function},
+% 	frame=Tb
+% }
+
+\lstnewenvironment{JavaScript}[1][]
+  {\lstset{
+  	language=JavaScript,
+  	#1,
+  }
+  \noindent
+  \put(0, -20){\line(1,0){470}}
+  \\*\put(0, -10){\begin{Large}\path{JavaScript}\end{Large}}
+  }{}
+
+\lstnewenvironment{Kotlin}[1][]
+  {\lstset{
+	language=JavaScript,
+	#1,
+  }
+  \noindent
+  \put(0, -6){\line(1,0){470}}
+  \\*\put(0, -5){\begin{Large}\path{Kotlin}\end{Large}}
+  }{}
+
 
 \renewcommand{\lstlistingname}{Листинг}
 
