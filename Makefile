@@ -21,7 +21,7 @@ diploma_quiet:
 	pdflatex main.tex > /dev/null
 
 clean:
-	for file in `find . -name "*.pdf"`; do rm $$file; done
+	# for file in `find . -name "*.pdf"`; do rm $$file; done
 	for file in `find . -name "*.log"`; do rm $$file; done
 	for file in `find . -name "*.aux"`; do rm $$file; done
 	for file in `find . -name "*.bbl"`; do rm $$file; done
