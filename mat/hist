@@ -10,7 +10,8 @@ set style fill solid border -1
 set xtics rotate by 90 scale 0 offset 0, -9
 # set xtics right
 unset ytics
-unset key
+#unset key
+set key left vertical samplen 1
 set y2tics rotate by 90 offset 0, -1.5
 set y2label 'Время работы (мкс)' offset -2.5
 # set xlabel ' '
@@ -21,10 +22,20 @@ set xrange [-0.5:10.7]
 Red = "#ff0000"; Green = "#00ff00"; Blue = "#0000ff"
 
 set multiplot
-plot 'data' u 2:xticlabel(1) fc rgb Blue
-plot 'data' u 3:xticlabel(1) fc rgb Green
-plot 'data' u 4:xticlabel(1) fc rgb Red
+plot 'data' u 2:xticlabel(1) fc rgb Blue title ""
+plot 'data' u 3:xticlabel(1) fc rgb Green title " "
+plot 'data' u 4:xticlabel(1) fc rgb Red title "     "
 #  '' using 0:($2+100):('  sss') with labels rotate left
 #  '' u ($3) fc rgb Cpp,\
 #  '' using ($0-0.2):($2+0.25):1 with labels rotate left, \
 #  '' using ($0+0.18):($3+0.25):1 with labels rotate left
+
+set yrange [0:100]
+unset key
+unset ytics
+unset xtics
+unset border
+
+set label "До оптимизаций" at 0.5,87 center rotate by 90
+set label "После оптимизаций" at 1.5,85 center rotate by 90
+plot 0
