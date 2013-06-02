@@ -21,20 +21,32 @@
 
 \section{Richards}
 
-Результаты, полученные на начальном этапе, когда еще не были сделаны никакие оптимизации, на тест Richards представленны на рисунке \ref{richards_0}.
+Результаты, полученные на начальном этапе, когда еще не были сделаны никакие оптимизации, на тест Richards представленны на рисунке \ref{richards_0}. Столбец <<Фактор>> показывает во сколько раз время полученное на данном тесте больше времени теста на Dart.
 
 % \begin{table}[h]
 % \centering
-% \begin{tabular}[c]{|l|r|c|}
-% \hline
-%  & Время работы (мкс) & фактор \\ \hline
-% Dart & 123 & 1.0 \\ \hline
-% \end{tabular}
 % \caption{This table shows some data}
 % \end{table}
+
 \begin{figure}[ht!]
-\centering
-\includegraphics[width=0.8\textwidth]{images/richards_0.png}
+% \centering
+\begin{minipage}[t]{\linewidth}
+\includegraphics[width=0.65\textwidth]{images/richards_0.png}
+\end{minipage}
+~
+\put(-170,175){\begin{minipage}[h]{\linewidth}
+\begin{tabular}{|l|c|c|}
+    \hline
+    ~                    & Время (мкс) & Фактор \\ \hline
+    Dart                 & 2721.09     & 1.0    \\ \hline
+    Dart2JS(v8)          & 5101.78     & 1.87   \\ \hline
+    JavaScript (v8)      & 3683.24     & 1.35   \\ \hline
+    Kotlin2JS (v8)       & 19900.99    & 7.31   \\ \hline
+    Dart2JS(mozjs17)     & 48571.43    & 17.85  \\ \hline
+    JavaScript (mozjs17) & 6876.28     & 2.53   \\ \hline
+    Kotlin2JS (mozjs17)  & 111722.22   & 41.06  \\ \hline
+\end{tabular}
+\end{minipage}}
 \caption{Результаты теста Richards без оптимизаций}
 \label{richards_0}
 \end{figure}
@@ -64,25 +76,52 @@ org: Kotlin.definePackage({
 Экспериментально было подтвержденно, что для виртуальной машины V8 это действительно так -- этот же тест, но с меньшей вложенностью пакетов выполняется примерно на 30\% быстрее. А для виртуальной машины mozjs17 такое изменение никакого влияния на производительность не оказало (см. рисунок \ref{richards_i}).
 
 \begin{figure}[ht!]
-\centering
-	\begin{subfigure}[b]{0.7\textwidth}
-	\centering
+% \centering
+	\begin{subfigure}[b]{0.65\textwidth}
+	% \centering
+  \begin{minipage}[t]{\linewidth}
 	\includegraphics[width=\textwidth]{images/richards_i_v8.png}
-	\caption{Результаты измерений на V8}
-    \end{subfigure}
+  \end{minipage}
+  ~
+  \put(-10,217){\begin{minipage}[h]{\linewidth}
+  \begin{tabular}{|l|c|}
+      \hline
+      ~                    & Время (мкс) \\ \hline
+      Kotlin2JS(без изм.)  & 19900.99    \\ \hline
+      +Без пакетов(package)& 14262.41    \\ \hline
+      +Closure-compiler    & 8721.09     \\ \hline
+      +Inline accessors    & 5859.64     \\ \hline
+  \end{tabular}
+  \end{minipage}}
 
-  	\begin{subfigure}[b]{0.7\textwidth}
-	\centering
+	\caption{Результаты измерений на V8}
+  \end{subfigure}
+
+  \begin{subfigure}[b]{0.65\textwidth}
+	% \centering
+  \begin{minipage}[t]{\linewidth}
 	\includegraphics[width=\textwidth]{images/richards_i_mozjs17.png}
+  \end{minipage}
+  ~
+  \put(-10,217){\begin{minipage}[h]{\linewidth}
+  \begin{tabular}{|l|c|c|}
+      \hline
+      ~                    & Время (мкс) \\ \hline
+      Kotlin2JS(без изм.)  & 111722.22   \\ \hline
+      +Без пакетов(package)& 113833.33   \\ \hline
+      +Closure-compiler    & 63000.09    \\ \hline
+      +Inline accessors    & 25125       \\ \hline
+  \end{tabular}
+  \end{minipage}}
 	\caption{Результаты измерений на mozjs17}
-    \end{subfigure}
+  \end{subfigure}
 \\*``+'' означает что изменения накладываются на предыдущее
 \caption{Оптимизация кода сгенерированного на тесте Richards}
 \label{richards_i}
 \end{figure}
 
 % К сожалению, из-за структурных сложностей реализовать качественную оптимизацию для этого случая не удалось.
-
+\newpage
 Далее, можно заметить что все обращения к полям классов реализованы через функции, обычно называемые <<аксессорами>>\footnote{<<аксессором>> называют функцию предоставляющую доступ к полю объекта для его чтение(<<геттеры>>) или записи в него(<<сеттеры>>)}. Это объясняется тем, что в языке Kotlin у объектов нет полей, есть только свойства. По-умолчанию свойства имеют простую реализацию <<аксессоров>>, но пользователь может написать свою функцию <<аксессор>>. Для единообразия кода и для <<бинарной>>\footnote{Под <<бинарной>> совместимостью понимается возможность изменять код одного модуля (или иной единицы компиляции) без необходимости перекомпилировать зависящие от него модули}
 совместимости компилятор транслирует все <<аксессоры>> в функции, а все обращения к свойствам -- в вызов соответствующих функций. Пример такого кода на языке Kotlin приведен в листинге \ref{accessor_example_kt}, результат компиляции данного кода приведен в листинге \ref{accessor_example_js}
 
@@ -222,7 +261,26 @@ function add_property() {
 
 \begin{figure}[ht!]
 \centering
+\begin{minipage}[t]{\linewidth}
 \includegraphics[width=0.8\textwidth]{images/richards_f.png}
+\end{minipage}
+
+\begin{minipage}[h]{\linewidth}
+\centering
+\begin{tabular}{|l|c|c|}
+    \hline
+    ~                       & Время (мкс) & Фактор \\ \hline
+    Dart                    & 2721.09     & 1.0    \\ \hline
+    Dart2JS(v8)             & 5101.78     & 1.87   \\ \hline
+    JavaScript (v8)         & 3683.24     & 1.35   \\ \hline
+    Kotlin2JS (v8)          & 19900.99    & 7.31   \\ \hline
+    Kotlin2JS OPT (v8)      & 5647.88     & 2.07   \\ \hline
+    Dart2JS(mozjs17)        & 48571.43    & 17.85  \\ \hline
+    JavaScript (mozjs17)    & 6876.28     & 2.53   \\ \hline
+    Kotlin2JS (mozjs17)     & 111722.22   & 41.06  \\ \hline
+    Kotlin2JS OPT (mozjs17) & 29188.4     & 10.73  \\ \hline
+\end{tabular}
+\end{minipage}
 \caption{Итоговый результат на тесте Richards}
 \label{richards_f}
 \end{figure}
@@ -232,8 +290,24 @@ function add_property() {
 Результаты, полученные на начальном этапе, когда еще не были сделаны никакие оптимизации, на тест DeltaBlue представленны на рисунке~\ref{deltablue_0}.
 
 \begin{figure}[ht!]
-\centering
-\includegraphics[width=0.8\textwidth]{images/deltablue_0.png}
+% \centering
+\begin{minipage}[t]{\linewidth}
+\includegraphics[width=0.65\textwidth]{images/deltablue_0.png}
+\end{minipage}
+~
+\put(-173,175){\begin{minipage}[h]{\linewidth}
+\begin{tabular}{|l|c|c|}
+    \hline
+    ~                    & Время (мкс) & Фактор \\ \hline
+    Dart                 & 5321.81     & 1.0    \\ \hline
+    Dart2JS(v8)          & 6900.66     & 1.30   \\ \hline
+    JavaScript (v8)      & 5494.51     & 1.03   \\ \hline
+    Kotlin2JS (v8)       & 1347000     & 253.10 \\ \hline
+    Dart2JS(mozjs17)     & 50550       & 9.50   \\ \hline
+    JavaScript (mozjs17) & 10837.83    & 2.04   \\ \hline
+    Kotlin2JS (mozjs17)  & 563000.65   & 105.79  \\ \hline
+\end{tabular}
+\end{minipage}}
 \caption{Результаты теста DeltaBlue без оптимизаций}
 \label{deltablue_0}
 \end{figure}
@@ -241,18 +315,48 @@ function add_property() {
 При запуске на виртуaльной машине V8 тест, скомпилированный с помощью компилятора Kotlin, уступает ближайшему сопернику -- тесту скомпилированному с помощью Dart2js на 2 порядка. При запуске на mozjs17 -- на порядок.
 
 \begin{figure}[ht!]
-\centering
-	\begin{subfigure}[b]{0.63\textwidth}
-	\centering
-	\includegraphics[width=\textwidth]{images/deltablue_i_v8.png}
-	\caption{Результаты измерений на V8}
-    \end{subfigure}
+  % \centering
+  \begin{subfigure}[b]{0.63\textwidth}
+  \begin{minipage}[t]{\linewidth}
+  \includegraphics[width=\textwidth]{images/deltablue_i_v8.png}
+  \end{minipage}
+  ~
+  \put(-10,231){\begin{minipage}[h]{\linewidth}
+  \begin{tabular}{|l|c|}
+      \hline
+      ~                       & Время (мс)  \\ \hline
+      Kotlin2JS(без изм.)     & 1347.000    \\ \hline
+      +Inline акc. и пакеты   & 1062.500    \\ \hline
+      +ArrayList->LinkedList & 450.400     \\ \hline
+      +Везде Array            & 409.800     \\ \hline
+      +=== вместо K.equals    & 367.333   \\ \hline
+      +прямой вызов констр.   & 6.91379     \\ \hline
+  \end{tabular}
+  \end{minipage}}
 
-  	\begin{subfigure}[b]{0.63\textwidth}
-	\centering
-	\includegraphics[width=\textwidth]{images/deltablue_i_mozjs17.png}
-	\caption{Результаты измерений на mozjs17}
-    \end{subfigure}
+  \caption{Результаты измерений на V8}
+  \end{subfigure}
+
+  \begin{subfigure}[b]{0.63\textwidth}
+  % \centering
+  \begin{minipage}[t]{\linewidth}
+  \includegraphics[width=\textwidth]{images/deltablue_i_mozjs17.png}
+  \end{minipage}
+  ~
+  \put(-10,231){\begin{minipage}[h]{\linewidth}
+  \begin{tabular}{|l|c|c|}
+      \hline
+      ~                       & Время (мкс)  \\ \hline
+      Kotlin2JS(без изм.)     & 563000.65    \\ \hline
+      +Inline акc. и пакеты   & 382000.89    \\ \hline
+      +ArrayList->LinkedList & 70137.93     \\ \hline
+      +Везде Array            & 41591.83     \\ \hline
+      +=== вместо K.equals    & 31562.5      \\ \hline
+      +прямой вызов констр.   & 35017.24     \\ \hline
+  \end{tabular}
+  \end{minipage}}
+  \caption{Результаты измерений на mozjs17}
+  \end{subfigure}
 \\*``+'' означает что изменения накладываются на предыдущее
 \caption{Оптимизация кода сгенерированного на тесте DeltaBlue}
 \label{deltablue_i}
@@ -270,7 +374,7 @@ function add_property() {
 
 На рисунке \ref{deltablue_0_prifile} приведены результаты профилирования теста DeltaBlue. Как видно, много времени тратится на конструирование объектов, причем существенную долю этого времени занимает работа инфраструктурного кода. Как можно видеть на рисунке \ref{deltablue_i}, экспериментально удалось подтвердить, что ускорить конструирование объектов в рамках существующей структуры возможно.
 
-% \newpage
+\newpage
 Приведем простой пример демонстрирующий данную проблему (листинги \ref{constructor_problem_kt} и \ref{constructor_problem_js}):
 
 \begin{code}
@@ -372,7 +476,26 @@ function super_init () {
 
 \begin{figure}[ht!]
 \centering
+\begin{minipage}[t]{\linewidth}
 \includegraphics[width=0.8\textwidth]{images/deltablue_f.png}
+\end{minipage}
+
+\begin{minipage}[h]{\linewidth}
+\centering
+\begin{tabular}{|l|c|c|}
+    \hline
+    ~                       & Время (мкс) & Фактор \\ \hline
+    Dart                    & 5321.81     & 1.0    \\ \hline
+    Dart2JS(v8)             & 6900.66     & 1.30   \\ \hline
+    JavaScript (v8)         & 5494.51     & 1.03   \\ \hline
+    Kotlin2JS (v8)          & 1347000     & 253.10 \\ \hline
+    Kotlin2JS OPT (v8)      & 8950.89     & 1.68   \\ \hline
+    Dart2JS(mozjs17)        & 50550       & 9.50   \\ \hline
+    JavaScript (mozjs17)    & 10837.83    & 2.04   \\ \hline
+    Kotlin2JS (mozjs17)     & 563000.65   & 105.79  \\ \hline
+    Kotlin2JS OPT (mozjs17) & 62750     & 11.79  \\ \hline
+\end{tabular}
+\end{minipage}
 \caption{Итоговый результат на тесте DeltaBlue}
 \label{deltablue_f}
 \end{figure}
@@ -383,8 +506,24 @@ function super_init () {
 Результаты, полученные на начальном этапе, без использования оптимизаций, на тест Havlak представленны на рисунке \ref{havlak_0}.
 
 \begin{figure}[ht!]
-\centering
-\includegraphics[width=0.8\textwidth]{images/havlak_0.png}
+% \centering
+\begin{minipage}[t]{\linewidth}
+\includegraphics[width=0.65\textwidth]{images/havlak_0.png}
+\end{minipage}
+~
+\put(-173,175){\begin{minipage}[h]{\linewidth}
+\begin{tabular}{|l|c|c|}
+    \hline
+    ~                    & Время (мс) & Фактор \\ \hline
+    Dart                 & 654        & 1.0    \\ \hline
+    Dart2JS(v8)          & 1685       & 2.58   \\ \hline
+    JavaScript (v8)      & 2401       & 3.67   \\ \hline
+    Kotlin2JS (v8)       & 103371     & 158.06 \\ \hline
+    Dart2JS(mozjs17)     & 20637      & 31.56  \\ \hline
+    JavaScript (mozjs17) & 2534       & 3.87   \\ \hline
+    Kotlin2JS (mozjs17)  & 52893      & 80.88  \\ \hline
+\end{tabular}
+\end{minipage}}
 \caption{Результаты теста Havlak без оптимизаций}
 \label{havlak_0}
 \end{figure}
@@ -434,25 +573,54 @@ function DFS(currentNode, nodes, number, last, current) {
 
 На рисунке \ref{havlak_0_profile} представлены результаты профилирования кода, полученного компилятором Kotlin. Наибольший интерес для нас представляют функции из стандартной библиотеки. Это связанно с тем, что нашей главной целью является увеличение общей производительности, а не просто увеличение скорости выполнения конкретного теста. В результате изучения кода были отобраны функции, которые нуждаются в оптимизации. На рисунке, такие функции помечены точкой в начале строки. В отношении остальных функций было решено, что они достаточно оптимальны.
 
-Как видно, больше всего времени программа проводит в коде конструктора -- функция \path{klass}, что еще раз свидетельствует о необходимости оптимизировать процесс конструирования объектов. Результаты применения этой оптимизации можно видеть на рисунке \ref{havlak_i}.
-
 \begin{figure}[ht!]
-\centering
-  \begin{subfigure}[b]{0.7\textwidth}
-  \centering
+% \centering
+  \begin{subfigure}[b]{0.65\textwidth}
+  \begin{minipage}[t]{\linewidth}
   \includegraphics[width=\textwidth]{images/havlak_i_v8.png}
-  \caption{Результаты измерений на V8}
-    \end{subfigure}
+  \end{minipage}
+  ~
+  \put(-10,211){\begin{minipage}[h]{\linewidth}
+  \begin{tabular}{|l|c|}
+      \hline
+      ~                       & Время (мс)  \\ \hline
+      Kotlin2JS(без изм.)     & 103371      \\ \hline
+      +Inline акc. и пакеты   & 78110       \\ \hline
+      +Kotlin.\$new -> new    & 5095       \\ \hline
+      +оптмизация hashObject  & 3667        \\ \hline
+      +PrimitiveHashMap       & 1641        \\ \hline
+  \end{tabular}
+  \end{minipage}}
 
-    \begin{subfigure}[b]{0.7\textwidth}
-  \centering
+  \caption{Результаты измерений на V8}
+  \end{subfigure}
+
+  \begin{subfigure}[b]{0.65\textwidth}
+  % \centering
+  \begin{minipage}[t]{\linewidth}
   \includegraphics[width=\textwidth]{images/havlak_i_mozjs17.png}
+  \end{minipage}
+  ~
+  \put(-10,211){\begin{minipage}[h]{\linewidth}
+  \begin{tabular}{|l|c|c|}
+      \hline
+      ~                       & Время (мс)  \\ \hline
+      Kotlin2JS(без изм.)     & 103371      \\ \hline
+      +Inline акc. и пакеты   & 69744       \\ \hline
+      +Kotlin.\$new -> new    & 11989       \\ \hline
+      +оптмизация hashObject  & 7406        \\ \hline
+      +PrimitiveHashMap       & 5615        \\ \hline
+  \end{tabular}
+  \end{minipage}}
   \caption{Результаты измерений на mozjs17}
-    \end{subfigure}
+  \end{subfigure}
 \\*``+'' означает что изменения накладываются на предыдущее
 \caption{Оптимизация кода сгенерированного на тесте Havlak}
 \label{havlak_i}
 \end{figure}
+
+\newpage
+Как видно, больше всего времени программа проводит в коде конструктора -- функция \path{klass}, что еще раз свидетельствует о необходимости оптимизировать процесс конструирования объектов. Результаты применения этой оптимизации можно видеть на рисунке \ref{havlak_i}.
 
 Следующая интересная для нас функция это \path{Kotlin.$new}. Данная функция использовалась для старой реализации наследования, но в текущей реализации она уже не нужна. Поэтому данная функция была удалена, в результате чего был получен большой прирост скорости, который можно наблюдать на рисунке \ref{havlak_i}.
 
@@ -460,6 +628,16 @@ function DFS(currentNode, nodes, number, last, current) {
 На рисунке с результатом профилирования (\ref{havlak_0_profile}) это можно наблюдать ввиде вызовов функций \path{hashObject} и \path{getBucketForHash}.
 
 Функция \path{hashObject} используется в базовом классе для ассоциативных контейнеров \path{Hashtable} для получения хеша объекта. Оригинальная версия данной функции представлена в листинге \ref{hashObject_original}.
+
+В JavaScript при реализации ассоциативных массивов обычно пользуется тем, что во время выполнения объектам языка (Object) можно добавлять и удалять свойства. Для работы с такими свойствами используется их строковое представление~\cite{EffJS}. Зная это, можно понять почему функция \path{hashObject} возвращает строку.
+
+Данная реализация имеет два основных недостатка:
+\begin{enumerate}
+\item Нет отдельной обработки чисел, в результате чего каждое обращение к числу как объекту, во время проверки наличия у него методов \path{hashCode} и \path{toString}, приводит к его преобразованию в \path{Object}. Далее это число преобразуется в строку, не смотря на то, что такое преобразование будет осуществлено при обращении к свойству.
+Кроме того, такое преобразование чисел в строку может лишить виртуальную машину возможности оптимизировать обращения к индексированным свойствам объекта.
+
+\item Для объектов, которые явно не реализуют функцию \path{toString}, в соответствии со стандартом \cite{ES5}, мы всегда будем получать один и тот же результат -- <<[object Object]>>. Что приведет к тому, что все такие объекты будут попадать в одну группу.
+\end{enumerate}
 
 \begin{code}
 \begin{JavaScript}[caption=Оригинальная версия функции hashObject, label=hashObject_original]
@@ -489,16 +667,6 @@ function hashObject(obj) {
 }
 \end{JavaScript}
 \end{code}
-
-В JavaScript при реализации ассоциативных массивов обычно пользуется тем, что во время выполнения объектам языка (Object) можно добавлять и удалять свойства. Для работы с такими свойствами используется их строковое представление~\cite{EffJS}. Зная это, можно понять почему функция \path{hashObject} возвращает строку.
-
-Данная реализация имеет два основных недостатка:
-\begin{enumerate}
-\item Нет отдельной обработки чисел, в результате чего каждое обращение к числу как объекту, во время проверки наличия у него методов	\path{hashCode} и \path{toString}, приводит к его преобразованию в \path{Object}. Далее это число преобразуется в строку, не смотря на то, что такое преобразование будет осуществлено при обращении к свойству.
-Кроме того, такое преобразование чисел в строку может лишить виртуальную машину возможности оптимизировать обращения к индексированным свойствам объекта.
-
-\item Для объектов, которые явно не реализуют функцию \path{toString}, в соответствии со стандартом \cite{ES5}, мы всегда будем получать один и тот же результат -- <<[object Object]>>. Что приведет к тому, что все такие объекты будут попадать в одну группу.
-\end{enumerate}
 
 Для исправления первого недостатка была добавлена соответствующая логика, которая возвращает входной аргумент, без преобразований, если он имеет числовой тип (\path{number}).
 
@@ -555,7 +723,26 @@ function hashObject(obj) {
 
 \begin{figure}[ht!]
 \centering
+\begin{minipage}[t]{\linewidth}
 \includegraphics[width=0.8\textwidth]{images/havlak_f.png}
+\end{minipage}
+
+\begin{minipage}[h]{\linewidth}
+\centering
+\begin{tabular}{|l|c|c|}
+    \hline
+    ~                       & Время (мкс) & Фактор \\ \hline
+    Dart                    & 654        & 1.0    \\ \hline
+    Dart2JS(v8)             & 1685       & 2.58   \\ \hline
+    JavaScript (v8)         & 2401       & 3.67   \\ \hline
+    Kotlin2JS (v8)          & 103371     & 158.06 \\ \hline
+    Kotlin2JS OPT (v8)      & 1641       & 2.51   \\ \hline
+    Dart2JS(mozjs17)        & 20637      & 31.56  \\ \hline
+    JavaScript (mozjs17)    & 2534       & 3.87   \\ \hline
+    Kotlin2JS (mozjs17)     & 52893      & 80.88  \\ \hline
+    Kotlin2JS OPT (mozjs17) & 5615       & 8.59   \\ \hline
+\end{tabular}
+\end{minipage}
 \caption{Итоговый результат на тесте Havlak}
 \label{havlak_f}
 \end{figure}
